@@ -1,0 +1,60 @@
+name: Compilar APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Preparar o projeto (aceita projeto.zip OU pastas soltas)
+        run: |
+          if [ -f projeto.zip ]; then
+            echo "Achei projeto.zip, descompactando..."
+            rm -rf proj
+            mkdir proj
+            unzip -q projeto.zip -d proj
+            echo "DIR=proj" >> "$GITHUB_ENV"
+          elif [ -f settings.gradle.kts ]; then
+            echo "Achei o projeto nas pastas soltas."
+            echo "DIR=." >> "$GITHUB_ENV"
+          else
+            echo "ERRO: não achei projeto.zip nem settings.gradle.kts na raiz do repositório."
+            exit 1
+          fi
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Instalar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Compilar o APK
+        run: gradle -p "$DIR" assembleDebug --stacktrace
+
+      - name: Guardar o APK (aba Actions > Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: hamk-apk
+          path: ${{ env.DIR }}/app/build/outputs/apk/debug/*.apk
+
+      - name: Publicar o APK na aba Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Hamk - APK ${{ github.run_number }}
+          body: APK de teste (debug) gerado automaticamente. Baixe o arquivo app-debug.apk e instale no celular.
+          files: ${{ env.DIR }}/app/build/outputs/apk/debug/*.apk
